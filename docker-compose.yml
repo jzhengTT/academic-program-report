@@ -1,11 +1,99 @@
 services:
+  redis:
+    image: redis:7-alpine
+    container_name: academic-program-redis
+    restart: unless-stopped
+    command: redis-server --maxmemory 64mb --maxmemory-policy allkeys-lru
+    networks:
+      - academic-program-internal
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+  oauth2-proxy:
+    image: quay.io/oauth2-proxy/oauth2-proxy:v7.13.0-alpine
+    container_name: academic-program-oauth2-proxy
+    restart: unless-stopped
+    command:
+      - --http-address=0.0.0.0:4180
+      - --reverse-proxy=true
+      - --upstream=static://202
+      - --set-xauthrequest=true
+      - --pass-access-token=true
+      - --pass-user-headers=true
+      - --cookie-refresh=1h
+      - --cookie-expire=24h
+      - --session-store-type=redis
+      - --redis-connection-url=redis://redis:6379
+    environment:
+      OAUTH2_PROXY_PROVIDER: ${OAUTH2_PROXY_PROVIDER:-entra-id}
+      OAUTH2_PROXY_OIDC_ISSUER_URL: ${OAUTH2_PROXY_OIDC_ISSUER_URL:-https://login.microsoftonline.com/${OAUTH2_PROXY_AZURE_TENANT}/v2.0}
+      OAUTH2_PROXY_CLIENT_ID: ${OAUTH2_PROXY_CLIENT_ID}
+      OAUTH2_PROXY_CLIENT_SECRET: ${OAUTH2_PROXY_CLIENT_SECRET}
+      OAUTH2_PROXY_COOKIE_SECRET: ${OAUTH2_PROXY_COOKIE_SECRET}
+      OAUTH2_PROXY_REDIRECT_URL: ${OAUTH2_PROXY_REDIRECT_URL:-https://${FQDN}/oauth2/callback}
+      OAUTH2_PROXY_EMAIL_DOMAINS: ${OAUTH2_PROXY_EMAIL_DOMAINS:-*}
+      OAUTH2_PROXY_COOKIE_SECURE: ${OAUTH2_PROXY_COOKIE_SECURE:-true}
+      OAUTH2_PROXY_COOKIE_SAMESITE: ${OAUTH2_PROXY_COOKIE_SAMESITE:-lax}
+      OAUTH2_PROXY_COOKIE_NAME: ${OAUTH2_PROXY_COOKIE_NAME:-_oauth2_proxy}
+      OAUTH2_PROXY_WHITELIST_DOMAINS: ${OAUTH2_PROXY_WHITELIST_DOMAINS:-.${FQDN}}
+      OAUTH2_PROXY_COOKIE_DOMAINS: ${OAUTH2_PROXY_COOKIE_DOMAINS:-.${FQDN}}
+      OAUTH2_PROXY_SKIP_PROVIDER_BUTTON: ${OAUTH2_PROXY_SKIP_PROVIDER_BUTTON:-true}
+      OAUTH2_PROXY_INSECURE_OIDC_SKIP_ISSUER_VERIFICATION: ${OAUTH2_PROXY_INSECURE_OIDC_SKIP_ISSUER_VERIFICATION:-true}
+    networks:
+      - academic-program-internal
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:4180/ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    container_name: academic-program-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - ACME_DIRECTORY_URL=${ACME_DIRECTORY_URL:-https://acme-v02.api.letsencrypt.org/directory}
+      - ACME_CONTACT=${ACME_CONTACT}
+      - FQDN=${FQDN}
+      - ADDITIONAL_HOSTNAMES=${ADDITIONAL_HOSTNAMES:-}
+    volumes:
+      - type: bind
+        source: ${NGINX_LOGS_PATH:-./nginx/logs}
+        target: /var/log/nginx
+      - /etc/ssl/certs/ca-certificates.crt:/etc/ssl/certs/ca-certificates.crt:ro
+    networks:
+      - academic-program-public
+      - academic-program-internal
+    depends_on:
+      oauth2-proxy:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
     container_name: academic-program-backend
-    ports:
-      - "8000:8000"
     environment:
       - ASANA_ACCESS_TOKEN=${ASANA_ACCESS_TOKEN}
       - ASANA_PROJECT_GID=${ASANA_PROJECT_GID}
@@ -14,8 +102,15 @@ services:
       - ASANA_FIELD_HARDWARE_TYPES=${ASANA_FIELD_HARDWARE_TYPES}
       - ASANA_FIELD_POINT_OF_CONTACT=${ASANA_FIELD_POINT_OF_CONTACT}
       - CORS_ORIGINS=${CORS_ORIGINS}
+      - DATABASE_URL=${DATABASE_URL:-sqlite:///./data/academic_program.db}
     volumes:
-      - ./backend/data:/app/data
+      - type: bind
+        source: ./backend/data
+        target: /app/data
+    expose:
+      - "8000"
+    networks:
+      - academic-program-internal
     restart: unless-stopped
 
   frontend:
@@ -23,10 +118,20 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        - VITE_API_BASE_URL=http://localhost:8000/api/v1
+        - VITE_API_BASE_URL=https://${FQDN}/api/v1
     container_name: academic-program-frontend
-    ports:
-      - "80:80"
     depends_on:
       - backend
+    expose:
+      - "80"
+    networks:
+      - academic-program-internal
     restart: unless-stopped
+
+networks:
+  academic-program-public:
+    driver: bridge
+    name: academic-program-public
+  academic-program-internal:
+    driver: bridge
+    name: academic-program-internal

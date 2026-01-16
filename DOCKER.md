@@ -48,51 +48,44 @@ ASANA_FIELD_POINT_OF_CONTACT=field_gid_here
 ### 3. Build and Run
 
 ```bash
-# Build and start all services
-docker-compose up -d
+# Production (ACME + OAuth2 reverse proxy)
+docker compose up -d
+
+# Local (no OAuth2, direct ports)
+docker compose -f docker-compose.local.yml up -d
 
 # View logs
-docker-compose logs -f
+docker compose logs -f
 
 # Stop services
-docker-compose down
+docker compose down
 ```
 
 ### 4. Access the Application
 
-- **Frontend Dashboard:** http://localhost
-- **Backend API:** http://localhost:8000
+- **Production Dashboard:** https://<FQDN>
+- **Local Frontend:** http://localhost:8080
+- **Local Backend API:** http://localhost:8000
 
 ## Production Deployment
 
-### For Server Deployment
+Production uses the built-in Nginx reverse proxy with ACME and OAuth2.
 
-When deploying to a production server, you need to update the API URL in the docker-compose.yml:
+### Required Environment Variables
 
-```yaml
-frontend:
-  build:
-    context: ./frontend
-    dockerfile: Dockerfile
-    args:
-      # Replace with your server's domain or IP
-      - VITE_API_BASE_URL=http://your-server.com/api/v1
+- `FQDN` (publicly resolvable hostname)
+- `ACME_CONTACT`
+- `OAUTH2_PROXY_CLIENT_ID`
+- `OAUTH2_PROXY_CLIENT_SECRET`
+- `OAUTH2_PROXY_COOKIE_SECRET`
+- `OAUTH2_PROXY_AZURE_TENANT` (if using Entra ID)
+
+### Start Production
+
+```bash
+make setup  # copies .env.example to .env
+make up
 ```
-
-### Using a Reverse Proxy
-
-If you're using nginx or another reverse proxy in front of Docker:
-
-1. Expose backend on a different port:
-   ```yaml
-   backend:
-     ports:
-       - "8000:8000"
-   ```
-
-2. Configure your reverse proxy to forward:
-   - `/` → frontend container (port 80)
-   - `/api/*` → backend container (port 8000)
 
 ### Database Persistence
 
@@ -102,31 +95,31 @@ The database is stored in `./backend/data/` directory and is mounted as a volume
 
 ```bash
 # Build without cache
-docker-compose build --no-cache
+docker compose build --no-cache
 
 # Rebuild and restart
-docker-compose up -d --build
+docker compose up -d --build
 
 # View running containers
-docker-compose ps
+docker compose ps
 
 # Stop and remove containers
-docker-compose down
+docker compose down
 
 # Stop and remove containers + volumes
-docker-compose down -v
+docker compose down -v
 
 # View backend logs
-docker-compose logs backend
+docker compose logs backend
 
 # View frontend logs
-docker-compose logs frontend
+docker compose logs frontend
 
 # Execute command in backend container
-docker-compose exec backend bash
+docker compose exec backend bash
 
 # Restart a specific service
-docker-compose restart backend
+docker compose restart backend
 ```
 
 ## Troubleshooting
@@ -135,7 +128,7 @@ docker-compose restart backend
 
 Check the logs:
 ```bash
-docker-compose logs backend
+docker compose logs backend
 ```
 
 Common issues:
@@ -146,21 +139,21 @@ Common issues:
 
 1. Check if backend is running:
    ```bash
-   docker-compose ps
+   docker compose ps
    ```
 
 2. Verify the API URL was set correctly during build:
    ```bash
-   docker-compose build --no-cache frontend
+   docker compose build --no-cache frontend
    ```
 
 ### Database issues
 
 To reset the database:
 ```bash
-docker-compose down
+docker compose down
 rm -rf backend/data/academic_program.db
-docker-compose up -d
+docker compose up -d
 ```
 
 ## Environment Variables
@@ -175,37 +168,60 @@ All environment variables are defined in the `.env` file at the project root:
 | `ASANA_FIELD_STUDENTS_COUNT` | Custom field GID for student count | Yes |
 | `ASANA_FIELD_HARDWARE_TYPES` | Custom field GID for hardware types | Yes |
 | `ASANA_FIELD_POINT_OF_CONTACT` | Custom field GID for point of contact | Yes |
+| `CORS_ORIGINS` | Comma-separated allowed origins | Yes |
+| `ACME_DIRECTORY_URL` | ACME endpoint for certificates | Yes |
+| `ACME_CONTACT` | Contact email for ACME certificates | Yes |
+| `FQDN` | Public hostname for TLS certs | Yes |
+| `ADDITIONAL_HOSTNAMES` | Comma-separated extra hostnames | No |
+| `OAUTH2_PROXY_PROVIDER` | OAuth2 provider (entra-id, oidc, etc.) | Yes |
+| `OAUTH2_PROXY_AZURE_TENANT` | Entra ID tenant ID | Yes (Entra) |
+| `OAUTH2_PROXY_OIDC_ISSUER_URL` | OIDC issuer URL | Yes |
+| `OAUTH2_PROXY_CLIENT_ID` | OAuth2 client ID | Yes |
+| `OAUTH2_PROXY_CLIENT_SECRET` | OAuth2 client secret | Yes |
+| `OAUTH2_PROXY_COOKIE_SECRET` | OAuth2 cookie secret | Yes |
+| `OAUTH2_PROXY_REDIRECT_URL` | OAuth2 redirect URL | Yes |
+| `OAUTH2_PROXY_EMAIL_DOMAINS` | Allowed email domains | No |
+| `OAUTH2_PROXY_COOKIE_SECURE` | Secure cookie flag | No |
+| `OAUTH2_PROXY_COOKIE_SAMESITE` | Cookie SameSite mode | No |
+| `OAUTH2_PROXY_WHITELIST_DOMAINS` | Allowed redirect domains | No |
+| `OAUTH2_PROXY_COOKIE_DOMAINS` | Cookie domains | No |
+| `OAUTH2_PROXY_SKIP_PROVIDER_BUTTON` | Skip provider selection | No |
+| `OAUTH2_PROXY_INSECURE_OIDC_SKIP_ISSUER_VERIFICATION` | Skip issuer verification | No |
 
 ## Architecture
 
 ```
-┌─────────────────┐
-│   Frontend      │
-│   (Nginx:80)    │
-└────────┬────────┘
-         │
-         │ HTTP
-         │
-┌────────▼────────┐
-│   Backend       │
-│   (FastAPI)     │
-│   Port 8000     │
-└────────┬────────┘
-         │
-         │
-┌────────▼────────┐
-│   SQLite DB     │
-│   (Volume)      │
-└─────────────────┘
+┌────────────────────────────┐
+│   Nginx + ACME + OAuth2    │
+│   (Ports 80/443)           │
+└────────────┬───────────────┘
+             │ HTTPS
+             │
+     ┌───────▼────────┐
+     │   Frontend     │
+     │   (Nginx:80)   │
+     └───────┬────────┘
+             │
+     ┌───────▼────────┐
+     │   Backend      │
+     │   (FastAPI)    │
+     │   Port 8000    │
+     └───────┬────────┘
+             │
+             │
+     ┌───────▼────────┐
+     │   SQLite DB    │
+     │   (Volume)     │
+     └────────────────┘
 ```
 
 ## Security Notes for Production
 
-1. **Change default ports:** Don't expose backend on 8000 in production
-2. **Use HTTPS:** Configure SSL certificates with a reverse proxy
+1. **Don't expose backend ports:** Only Nginx should be exposed in production
+2. **Use HTTPS:** ACME certificates are configured via the Nginx container
 3. **Secure .env file:** Ensure `.env` has restricted permissions (600)
 4. **API keys:** Never commit `.env` to version control
-5. **Network isolation:** Use Docker networks to isolate backend from external access
+5. **Network isolation:** Backend and frontend are internal-only networks
 
 ## Backup
 
@@ -216,5 +232,5 @@ To backup your data:
 cp backend/data/academic_program.db backup/academic_program_$(date +%Y%m%d).db
 
 # Or use Docker
-docker-compose exec backend cp /app/data/academic_program.db /app/data/backup.db
+docker compose exec backend cp /app/data/academic_program.db /app/data/backup.db
 ```
