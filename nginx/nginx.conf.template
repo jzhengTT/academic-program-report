@@ -1,0 +1,157 @@
+# OAuth2 Proxy upstream
+upstream oauth2_proxy {
+    server oauth2-proxy:4180;
+    keepalive 32;
+}
+
+# Frontend and Backend upstreams
+upstream frontend {
+    server frontend:80;
+    keepalive 32;
+}
+
+upstream backend {
+    server backend:8000;
+    keepalive 32;
+}
+
+# ACME shared memory zone
+acme_shared_zone zone=acme_shared:1M;
+
+# ACME issuer configuration
+acme_issuer acme_server {
+    uri         ${ACME_DIRECTORY_URL};
+    contact     ${ACME_CONTACT};
+    accept_terms_of_service;
+}
+
+    # HTTP server for ACME challenges and redirects
+    # Supports multiple hostnames via SERVER_NAMES (FQDN + comma-separated ADDITIONAL_HOSTNAMES)
+    server {
+        listen 80;
+        server_name ${SERVER_NAMES};
+
+        # Handle ACME challenges
+        location /.well-known/acme-challenge/ {
+            # ACME module handles this automatically
+        }
+
+        # Redirect everything else to HTTPS FQDN (canonical hostname)
+        location / {
+            return 301 https://${FQDN}$request_uri;
+        }
+    }
+
+    # HTTP catch-all for short names - redirect to HTTPS FQDN
+    server {
+        listen 80 default_server;
+        server_name _;
+
+        # Redirect all requests to HTTPS FQDN
+        return 301 https://${FQDN}$request_uri;
+    }
+
+    # HTTPS server with ACME certificate and reverse proxy
+    # Supports multiple hostnames via SERVER_NAMES - ACME will request SAN certificate covering all hostnames
+    server {
+        listen 443 ssl;
+        server_name ${SERVER_NAMES};
+
+        # ACME certificate configuration
+        acme_certificate acme_server;
+        ssl_certificate       $acme_certificate;
+        ssl_certificate_key   $acme_certificate_key;
+        ssl_certificate_cache max=2;
+
+        # SSL configuration
+        ssl_protocols TLSv1.2 TLSv1.3;
+        ssl_ciphers ECDHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES128-SHA256:ECDHE-RSA-AES256-SHA384;
+        ssl_prefer_server_ciphers on;
+        ssl_session_cache shared:SSL:10m;
+        ssl_session_timeout 10m;
+
+        # Handle large headers from OAuth2 providers (especially Entra ID)
+        large_client_header_buffers 4 32k;
+
+        # Security headers
+        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+        add_header X-Frame-Options DENY always;
+        add_header X-Content-Type-Options nosniff always;
+        add_header X-XSS-Protection "1; mode=block" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+        # Health check endpoint (unauthenticated)
+        location /health {
+            access_log off;
+            return 200 "healthy\n";
+            add_header Content-Type text/plain;
+        }
+
+        # OAuth2 Proxy endpoints (unauthenticated)
+        location /oauth2/ {
+            proxy_pass http://oauth2_proxy;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header X-Forwarded-Host $host;
+            proxy_set_header X-Auth-Request-Redirect $request_uri;
+
+            # Disable buffering to handle large OAuth2 headers
+            proxy_buffering off;
+        }
+
+        # OAuth2 Proxy auth endpoint for auth_request
+        location = /oauth2/auth {
+            internal;
+            proxy_pass http://oauth2_proxy;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header X-Forwarded-Uri $request_uri;
+            proxy_set_header Content-Length "";
+            proxy_pass_request_body off;
+
+            # Disable buffering to handle large OAuth2 headers
+            proxy_buffering off;
+        }
+
+        # API requests (authenticated)
+        location /api/ {
+            auth_request /oauth2/auth;
+            error_page 401 = /oauth2/sign_in;
+
+            # Pass through Set-Cookie headers from oauth2-proxy for session ID cookie
+            auth_request_set $auth_cookie $upstream_http_set_cookie;
+            if ($auth_cookie) {
+                add_header Set-Cookie $auth_cookie;
+            }
+
+            proxy_pass http://backend;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header X-Forwarded-Host $host;
+        }
+
+        # Frontend (authenticated)
+        location / {
+            auth_request /oauth2/auth;
+            error_page 401 = /oauth2/sign_in;
+
+            # Pass through Set-Cookie headers from oauth2-proxy for session ID cookie
+            auth_request_set $auth_cookie $upstream_http_set_cookie;
+            if ($auth_cookie) {
+                add_header Set-Cookie $auth_cookie;
+            }
+
+            proxy_pass http://frontend;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header X-Forwarded-Host $host;
+        }
+    }

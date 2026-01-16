@@ -1,0 +1,36 @@
+Josh Zheng's Academic Dashboard
+
+- Checking out the app locally
+- Bringing in assets from nginx-static-server
+- Creating a docker-compose-v1 deployment
+
+ https://github.com/jzhengTT/academic-program-report
+ https://tenstorrent.atlassian.net/servicedesk/customer/portal/95/TISM-22004?created=true
+
+ Had a chat with Mike Sollanych and Bira Coelho. Need help deploy a webapp that’s a simple dashboard over some Asana data.
+
+Git Repository:
+    URL: git@github.com:jzhengTT/academic-program-report.git
+    Branch: main
+
+Docker Configuration:
+    Docker Compose file location: docker-compose.yml (root of repository)
+
+Port Requirements:
+    Backend API: Port 8000
+    Frontend Web UI: Port 80 (or 443 if SSL configured)
+
+External Service Dependencies:
+    Asana API (app.asana.com)
+        Protocol: HTTPS outbound
+        Authentication: Personal Access Token (will provide separately)
+        Required endpoints: https://app.asana.com/api/1.0/*
+
+Storage:
+    SQLite database in./backend/data
+
+Environment Variables:
+    I have the .env file saved locally, let me know what’s the best way to give to you.
+
+Hostname Suggestion:
+    academic-dashboard.local.tenstorrent.com

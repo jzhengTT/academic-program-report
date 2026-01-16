@@ -30,16 +30,16 @@ Quick start:
 ```bash
 # Copy and configure environment file
 cp .env.example .env
-# Edit .env with your Asana credentials
+# Edit .env with your Asana credentials and production settings
 
-# Build and start services
-docker-compose up -d
+# Build and start production services
+docker compose up -d
 
 # View logs
-docker-compose logs -f
+docker compose logs -f
 ```
 
-Access the dashboard at **http://localhost** (port 80)
+Access the dashboard at **https://<FQDN>** (port 443)
 
 ### Option 2: Local Development Setup
 
@@ -115,6 +115,15 @@ npm run dev
 ```
 
 The dashboard will be available at `http://localhost:5173`
+
+## Docker Local vs Production
+
+- Local: `docker compose -f docker-compose.local.yml up -d` (or `make local-up`)
+- Production: `docker compose up -d` (or `make up`)
+
+Local access:
+- Frontend: `http://localhost:8080`
+- Backend: `http://localhost:8000`
 
 ## Usage
 
