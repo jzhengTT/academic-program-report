@@ -30,7 +30,9 @@ app = FastAPI(
     title="Academic Program Reporting API",
     description="Dashboard API for tracking university collaborations with Tenstorrent",
     version="1.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
+    docs_url=None,
+    redoc_url=None
 )
 
 app.add_middleware(
@@ -44,17 +46,3 @@ app.add_middleware(
 app.include_router(metrics.router, prefix="/api/v1")
 app.include_router(universities.router, prefix="/api/v1")
 app.include_router(sync.router, prefix="/api/v1")
-
-
-@app.get("/health")
-def health_check() -> dict[str, str]:
-    return {"status": "healthy"}
-
-
-@app.get("/")
-def root() -> dict[str, str]:
-    return {
-        "message": "Academic Program Reporting API",
-        "docs": "/docs",
-        "health": "/health"
-    }

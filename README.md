@@ -10,13 +10,40 @@ A dashboard for tracking university collaborations with Tenstorrent, pulling dat
 
 ## Prerequisites
 
+### For Local Development
 - Python 3.9+
 - Node.js 18+
 - Asana Personal Access Token
 
+### For Docker Deployment
+- Docker (20.10+)
+- Docker Compose (2.0+)
+- Asana Personal Access Token
+
 ## Setup
 
-### 1. Backend Setup
+### Option 1: Docker Setup (Recommended for Deployment)
+
+For complete Docker deployment instructions, see [DOCKER.md](DOCKER.md).
+
+Quick start:
+```bash
+# Copy and configure environment file
+cp .env.example .env
+# Edit .env with your Asana credentials
+
+# Build and start services
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+```
+
+Access the dashboard at **http://localhost** (port 80)
+
+### Option 2: Local Development Setup
+
+#### 1. Backend Setup
 
 ```bash
 cd backend
@@ -32,7 +59,7 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-### 2. Configure Asana Credentials
+#### 2. Configure Asana Credentials
 
 Edit `backend/.env` with your Asana credentials:
 
@@ -42,6 +69,7 @@ ASANA_PROJECT_GID=your_project_id
 ASANA_FIELD_RESEARCHERS_COUNT=field_gid
 ASANA_FIELD_STUDENTS_COUNT=field_gid
 ASANA_FIELD_HARDWARE_TYPES=field_gid
+ASANA_FIELD_POINT_OF_CONTACT=field_gid
 ```
 
 **How to get these values:**
@@ -58,7 +86,7 @@ ASANA_FIELD_HARDWARE_TYPES=field_gid
 
 **Note:** The university name is pulled from the Asana task name itself, not from a custom field.
 
-### 3. Frontend Setup
+#### 3. Frontend Setup
 
 ```bash
 cd frontend
@@ -78,8 +106,6 @@ uvicorn app.main:app --reload
 ```
 
 The API will be available at `http://localhost:8000`
-- API docs: `http://localhost:8000/docs`
-- Health check: `http://localhost:8000/health`
 
 ### Start the Frontend
 

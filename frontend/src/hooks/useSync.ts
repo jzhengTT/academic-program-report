@@ -39,7 +39,7 @@ export function useSync(): UseSyncReturn {
     status: statusQuery.data,
     isLoading: statusQuery.isLoading,
     isSyncing: statusQuery.data?.is_syncing || triggerMutation.isPending,
-    triggerSync: triggerMutation.mutate,
+    triggerSync: (createSnapshot: boolean = true) => triggerMutation.mutate(createSnapshot),
     error: statusQuery.error || triggerMutation.error,
   };
 }

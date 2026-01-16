@@ -1,0 +1,32 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: academic-program-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - ASANA_ACCESS_TOKEN=${ASANA_ACCESS_TOKEN}
+      - ASANA_PROJECT_GID=${ASANA_PROJECT_GID}
+      - ASANA_FIELD_RESEARCHERS_COUNT=${ASANA_FIELD_RESEARCHERS_COUNT}
+      - ASANA_FIELD_STUDENTS_COUNT=${ASANA_FIELD_STUDENTS_COUNT}
+      - ASANA_FIELD_HARDWARE_TYPES=${ASANA_FIELD_HARDWARE_TYPES}
+      - ASANA_FIELD_POINT_OF_CONTACT=${ASANA_FIELD_POINT_OF_CONTACT}
+      - CORS_ORIGINS=${CORS_ORIGINS}
+    volumes:
+      - ./backend/data:/app/data
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_BASE_URL=http://localhost:8000/api/v1
+    container_name: academic-program-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped

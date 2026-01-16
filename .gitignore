@@ -13,6 +13,9 @@ build/
 *.db
 *.sqlite3
 
+# Keep data directory structure
+!backend/data/.gitkeep
+
 # Node
 node_modules/
 npm-debug.log*

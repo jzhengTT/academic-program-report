@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     asana_field_point_of_contact: str = ""
 
     # Database
-    database_url: str = "sqlite:///./academic_program.db"
+    database_url: str = "sqlite:///./data/academic_program.db"
 
     # Sync Settings
     sync_schedule_hours: int = 24
