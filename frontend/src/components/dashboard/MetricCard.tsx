@@ -9,6 +9,8 @@ interface MetricCardProps {
   value: number;
   growth?: number;
   icon: IconType;
+  /** Goal the value is measured against, rendered as "value/target" */
+  target?: number;
 }
 
 const ICONS: Record<IconType, ReactElement> = {
@@ -48,13 +50,21 @@ function formatGrowth(growth: number): string {
   return `${prefix}${growth.toFixed(1)}%`;
 }
 
-export function MetricCard({ title, value, growth, icon }: MetricCardProps): ReactElement {
+export function MetricCard({ title, value, growth, icon, target }: MetricCardProps): ReactElement {
   return (
     <div className="metric-card">
       <div className="metric-icon">{ICONS[icon]}</div>
       <div className="metric-content">
         <h3 className="metric-title">{title}</h3>
-        <div className="metric-value">{value.toLocaleString()}</div>
+        <div className="metric-value">
+          {value.toLocaleString()}
+          {target !== undefined && (
+            <span className="metric-target">
+              <span className="metric-target-slash">/</span>
+              {target.toLocaleString()}
+            </span>
+          )}
+        </div>
         {growth !== undefined && (
           <div className={`metric-growth ${getGrowthClass(growth)}`}>
             {formatGrowth(growth)}

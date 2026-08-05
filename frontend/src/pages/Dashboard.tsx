@@ -53,17 +53,17 @@ export function Dashboard(): ReactElement {
             <MetricCard
               title="Universities with TT Hardware"
               value={currentMetrics?.universities_with_tt_hardware ?? 0}
+              target={100}
               icon="university"
             />
             <MetricCard
-              title="Researchers on TT Hardware"
-              value={currentMetrics?.researchers_on_tt_hardware ?? 0}
+              title="Researchers and Students on TT Hardware"
+              value={
+                (currentMetrics?.researchers_on_tt_hardware ?? 0) +
+                (currentMetrics?.students_on_tt_hardware ?? 0)
+              }
+              target={1000}
               icon="researchers"
-            />
-            <MetricCard
-              title="Students on TT Hardware"
-              value={currentMetrics?.students_on_tt_hardware ?? 0}
-              icon="students"
             />
           </section>
 

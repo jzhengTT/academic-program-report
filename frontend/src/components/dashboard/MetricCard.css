@@ -52,6 +52,14 @@
   line-height: 1.2;
 }
 
+.metric-target {
+  color: #9ca3af;
+}
+
+.metric-target-slash {
+  padding: 0 6px;
+}
+
 .metric-growth {
   font-size: 14px;
   font-weight: 500;
